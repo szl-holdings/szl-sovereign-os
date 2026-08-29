@@ -1,6 +1,6 @@
 ---
 title: SZL Sovereign OS
-emoji: "⎈"
+emoji: "🛡️"
 colorFrom: blue
 colorTo: gray
 sdk: docker
