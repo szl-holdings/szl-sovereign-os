@@ -1,13 +1,13 @@
 ---
 title: SZL Sovereign OS
-emoji:
+emoji: "⎈"
 colorFrom: blue
 colorTo: gray
 sdk: docker
 app_port: 7860
 pinned: false
 license: apache-2.0
-short_description: Fail-closed operator kernel. Five verticals. Category capture. Receipts.
+short_description: "Fail-closed operator kernel. Five verticals."
 tags:
   - governance
   - receipts
