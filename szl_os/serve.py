@@ -75,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
                         "energy_j": None,
                         "lambda": "Conjecture 1 OPEN",
                         "signing": "STRUCTURAL-ONLY",
-                        "hf_push": "ROADMAP",
+                        "hf_push": "RETIRED",
                         "version": __version__,
                     }
                 ),
@@ -144,7 +144,7 @@ def serve(host: str = "0.0.0.0", port: int = 7860) -> None:
         raise RuntimeError("refusing proven_trust true")
     port = int(os.environ.get("PORT") or port)
     print(
-        f"[szl-sovereign-os] {host}:{port} · energy UNAVAILABLE · Λ = Conjecture 1 · HF push ROADMAP",
+        f"[szl-sovereign-os] {host}:{port} · energy UNAVAILABLE · Λ = Conjecture 1 · standalone HF publication RETIRED",
         file=sys.stderr,
     )
     ThreadingHTTPServer((host, port), Handler).serve_forever()
