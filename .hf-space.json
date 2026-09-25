@@ -2,6 +2,7 @@
   "space": "SZLHOLDINGS/szl-sovereign-os",
   "sdk": "docker",
   "port": 7860,
-  "status": "ROADMAP",
-  "note": "Hub push requires HF_TOKEN in org secrets. GitHub is canonical. Do not claim RUNNING until Hub readback."
+  "status": "RETIRED",
+  "publication": "DISABLED",
+  "note": "Historical standalone Space identity only. Its GitHub publisher was removed on 2026-09-04; do not recreate or treat this metadata as runtime qualification. Canonical product/runtime authority is szl-holdings/a11oy and szl-holdings/platform."
 }

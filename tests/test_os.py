@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
 import unittest
+from pathlib import Path
 
 from szl_os.capture import RUNNERS, run_capture
 from szl_os.organs import evaluate_anatomy, selftest
 from szl_os.verticals import VERTICALS, run_vertical
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class Kernel(unittest.TestCase):
@@ -17,6 +20,12 @@ class Kernel(unittest.TestCase):
         j = evaluate_anatomy(fabricate_joule=True)
         self.assertTrue(j["blocked"])
         self.assertIsNone(j["energy_j"])
+
+    def test_standalone_hf_publication_is_retired(self):
+        metadata = json.loads((ROOT / ".hf-space.json").read_text(encoding="utf-8"))
+        self.assertEqual(metadata["status"], "RETIRED")
+        self.assertEqual(metadata["publication"], "DISABLED")
+        self.assertFalse((ROOT / ".github" / "workflows" / "hf-space.yml").exists())
 
 
 class Verticals(unittest.TestCase):
@@ -76,7 +85,7 @@ class Serve(unittest.TestCase):
             self.assertEqual(res.status, 200)
             self.assertTrue(body["ok"])
             self.assertIsNone(body["energy_j"])
-            self.assertEqual(body["hf_push"], "ROADMAP")
+            self.assertEqual(body["hf_push"], "RETIRED")
             conn.request("POST", "/api/captures/run", json.dumps({"id": "zillow", "signal": "underwrite public records"}), {"Content-Type": "application/json"})
             cap = json.loads(conn.getresponse().read().decode())
             self.assertTrue(cap["ok"])
