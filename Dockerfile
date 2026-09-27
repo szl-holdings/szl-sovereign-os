@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # GCR pin — Docker Hub python: and public.ecr.aws are factory exit 128.
-FROM mirror.gcr.io/library/python:3.12-slim
+FROM mirror.gcr.io/library/python:3.14-slim
 WORKDIR /app
 COPY szl_os ./szl_os
 COPY app.py index.html ./
