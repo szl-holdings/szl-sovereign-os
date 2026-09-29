@@ -9,6 +9,12 @@ from typing import Any
 from .doctrine import KERNEL_COMMIT, YUYAY_FLOORS, proven_trust
 from .organs import envelope, evaluate_anatomy, evaluate_lambda, sha256_hex
 
+# "space" names a live Hugging Face Space whose card declares this vertical's
+# GitHub repository as its canonical source, or None when no such Space exists.
+# szl-quant: no Space is sourced from it (the Finance Space declares
+# szl-holdings/vertical-services), so none is claimed. Real estate: the Terra
+# Space declares szl-holdings/szl-real-estate as its canonical product source.
+# The retired szl-quant-live and szl-real-estate Spaces are absent on the Hub.
 VERTICALS = (
     {
         "id": "a11oy",
@@ -35,14 +41,14 @@ VERTICALS = (
         "id": "szl-quant",
         "lane": "Finance",
         "github": "https://github.com/szl-holdings/szl-quant",
-        "space": "https://huggingface.co/spaces/SZLHOLDINGS/szl-quant-live",
+        "space": None,
         "actuation": "SIMULATED",
     },
     {
         "id": "real-estate",
         "lane": "Real estate",
         "github": "https://github.com/szl-holdings/szl-real-estate",
-        "space": "https://huggingface.co/spaces/SZLHOLDINGS/szl-real-estate",
+        "space": "https://huggingface.co/spaces/SZLHOLDINGS/terra",
         "actuation": "ROADMAP",
     },
 )
