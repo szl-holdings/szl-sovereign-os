@@ -53,6 +53,24 @@ class Verticals(unittest.TestCase):
         r = run_vertical("szl-quant", "long the book")
         self.assertIn("not financial advice", r["body"]["output"])
 
+    def test_space_links_name_no_retired_space(self):
+        retired = ("szl-quant-live", "szl-real-estate")
+        prefix = "https://huggingface.co/spaces/SZLHOLDINGS/"
+        for vertical in VERTICALS:
+            space = vertical["space"]
+            if space is None:
+                continue
+            self.assertTrue(space.startswith(prefix), vertical["id"])
+            self.assertNotIn(space[len(prefix):], retired, vertical["id"])
+
+    def test_space_links_follow_declared_source(self):
+        spaces = {v["id"]: v["space"] for v in VERTICALS}
+        # Terra's card names szl-holdings/szl-real-estate as its canonical source.
+        self.assertEqual(spaces["real-estate"], "https://huggingface.co/spaces/SZLHOLDINGS/terra")
+        # No Space is sourced from szl-quant, so none is claimed.
+        self.assertIsNone(spaces["szl-quant"])
+        self.assertIsNone(run_vertical("szl-quant", "long the book")["body"]["space"])
+
 
 class Capture(unittest.TestCase):
     def test_all_run(self):
