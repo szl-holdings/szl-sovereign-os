@@ -195,7 +195,7 @@ def seize_quantconnect(signal: str) -> dict[str, Any]:
             "actuation": "SIMULATED",
             "honesty": "MODELED",
             "they_own": "backtest + brokerage adapters",
-            "we_own": "DSSE-signed advisory, no order routing",
+            "we_own": "structural-only, unsigned advisory, no order routing",
         },
     )
 

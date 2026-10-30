@@ -10,9 +10,13 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact source revision
         shell: bash
@@ -25,6 +29,40 @@ jobs:
           printf 'exact-source=%s\n' "$actual"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: unittest
         run: PYTHONPATH=. python -m unittest discover -s tests -v
+      - name: Local health smoke
+        run: PYTHONPATH=. python scripts/health_smoke.py
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Build and Twine check
+        run: |
+          python -m pip install --disable-pip-version-check "build>=1.2" "twine>=6.1"
+          python -m build
+          twine check dist/*
+      - name: SBOM generate and readback
+        run: |
+          python scripts/sbom_wheel.py dist/*.whl --out sbom.spdx.json
+          python scripts/sbom_wheel.py dist/*.whl --readback sbom.spdx.json
+      - name: Provenance wording
+        run: python scripts/check_provenance_wording.py
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build --tag szl-os:ci .
+      - name: Import smoke
+        run: docker run --rm --network none --entrypoint python szl-os:ci -c "import szl_os; assert szl_os.__version__ == '0.1.0'"
