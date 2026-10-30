@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -18,6 +20,58 @@ from .organs import evaluate_anatomy, selftest
 from .verticals import VERTICALS, run_vertical
 
 ROOT = Path(__file__).resolve().parent.parent
+SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
+
+
+def fetch_space_status(url: str = SPACE_API_URL, timeout: float = 5.0) -> int | None:
+    """Return the Space API status code. A transport failure is not a pass."""
+    try:
+        request = urllib.request.Request(url, method="GET", headers={"User-Agent": "szl-sovereign-os-readiness"})
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return int(response.status)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
+    except Exception:
+        return None
+
+
+def resolve_space_status() -> int | None:
+    """Test override SZL_SPACE_API_STATUS, else one read of the Space API."""
+    override = os.environ.get("SZL_SPACE_API_STATUS", "")
+    if override == "NONE":
+        return None
+    if override.isdigit():
+        return int(override)
+    return fetch_space_status()
+
+
+def readiness_from_space_status(status_code: int | None) -> dict:
+    """Fail closed. HTTP 401 is BLOCKED and is never a ready Space."""
+    record = {
+        "ok": False,
+        "ready": False,
+        "check": "readiness",
+        "surface": "szl-sovereign-os",
+        "hf_push": "RETIRED",
+        "proven_trust": False,
+        "energy": "UNAVAILABLE",
+        "energy_j": None,
+        "lambda": "Conjecture 1 OPEN",
+        "signing": "STRUCTURAL-ONLY",
+        "space_api": status_code,
+        "http": 503,
+    }
+    if status_code == 401:
+        record["status"] = "BLOCKED"
+        record["reason"] = "SPACE_API_UNAUTHORIZED"
+        return record
+    if status_code == 200:
+        record["status"] = "BLOCKED"
+        record["reason"] = "SPACE_PUBLICATION_RETIRED"
+        return record
+    record["status"] = "UNAVAILABLE"
+    record["reason"] = "SPACE_API_NOT_READY"
+    return record
 
 
 def _json(obj: object) -> bytes:
@@ -61,12 +115,14 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
-        if path in {"/healthz", "/readyz"}:
+        if path == "/healthz":
             self._send(
                 200,
                 _json(
                     {
                         "ok": True,
+                        "ready": False,
+                        "check": "liveness",
                         "surface": "szl-sovereign-os",
                         "doctrine": DOCTRINE,
                         "kernel_commit": KERNEL_COMMIT,
@@ -81,6 +137,13 @@ class Handler(BaseHTTPRequestHandler):
                 ),
                 "application/json",
             )
+            return
+        if path == "/readyz":
+            record = readiness_from_space_status(resolve_space_status())
+            record["doctrine"] = DOCTRINE
+            record["kernel_commit"] = KERNEL_COMMIT
+            record["version"] = __version__
+            self._send(int(record["http"]), _json(record), "application/json")
             return
         if path == "/api/selftest":
             self._send(200, _json(selftest()), "application/json")

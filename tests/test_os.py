@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
+import os
 import unittest
 from pathlib import Path
 
@@ -52,6 +53,9 @@ class Verticals(unittest.TestCase):
     def test_quant_not_advice(self):
         r = run_vertical("szl-quant", "long the book")
         self.assertIn("not financial advice", r["body"]["output"])
+        owned = run_capture("quantconnect", "long the book")["body"]["we_own"]
+        self.assertIn("structural-only, unsigned", owned)
+        self.assertNotIn("DSSE-signed", owned)
 
     def test_space_links_name_no_retired_space(self):
         retired = ("szl-quant-live", "szl-real-estate")
@@ -104,6 +108,24 @@ class Serve(unittest.TestCase):
             self.assertTrue(body["ok"])
             self.assertIsNone(body["energy_j"])
             self.assertEqual(body["hf_push"], "RETIRED")
+            self.assertFalse(body["ready"])
+            prior = os.environ.get("SZL_SPACE_API_STATUS")
+            os.environ["SZL_SPACE_API_STATUS"] = "401"
+            try:
+                conn.request("GET", "/readyz")
+                ready_res = conn.getresponse()
+                ready = json.loads(ready_res.read().decode())
+            finally:
+                if prior is None:
+                    os.environ.pop("SZL_SPACE_API_STATUS", None)
+                else:
+                    os.environ["SZL_SPACE_API_STATUS"] = prior
+            self.assertEqual(ready_res.status, 503)
+            self.assertFalse(ready["ready"])
+            self.assertFalse(ready["ok"])
+            self.assertEqual(ready["status"], "BLOCKED")
+            self.assertEqual(ready["reason"], "SPACE_API_UNAUTHORIZED")
+            self.assertEqual(ready["space_api"], 401)
             conn.request("POST", "/api/captures/run", json.dumps({"id": "zillow", "signal": "underwrite public records"}), {"Content-Type": "application/json"})
             cap = json.loads(conn.getresponse().read().decode())
             self.assertTrue(cap["ok"])
