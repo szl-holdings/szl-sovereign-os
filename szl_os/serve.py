@@ -23,30 +23,57 @@ ROOT = Path(__file__).resolve().parent.parent
 SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
 
 
-def fetch_space_status(url: str = SPACE_API_URL, timeout: float = 5.0) -> int | None:
-    """Return the Space API status code. A transport failure is not a pass."""
+def space_api_token() -> str:
+    """Optional bearer token. Empty means the probe is unauthenticated. Never log this value."""
+    return os.environ.get("SZL_SPACE_API_TOKEN", "").strip()
+
+
+def fetch_space_status(
+    url: str = SPACE_API_URL,
+    timeout: float = 5.0,
+    token: str | None = None,
+) -> tuple[int | None, bool]:
+    """Return the status code and whether this request sent authorization.
+
+    A transport failure is not a pass. The token is not included in the result.
+    """
+    if token is None:
+        token = space_api_token()
+    authenticated = bool(token)
+    headers = {"User-Agent": "szl-sovereign-os-readiness"}
+    if authenticated:
+        headers["Authorization"] = "Bearer " + token
     try:
-        request = urllib.request.Request(url, method="GET", headers={"User-Agent": "szl-sovereign-os-readiness"})
+        request = urllib.request.Request(url, method="GET", headers=headers)
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return int(response.status)
+            return int(response.status), authenticated
     except urllib.error.HTTPError as exc:
-        return int(exc.code)
+        return int(exc.code), authenticated
     except Exception:
-        return None
+        return None, authenticated
 
 
-def resolve_space_status() -> int | None:
-    """Test override SZL_SPACE_API_STATUS, else one read of the Space API."""
+def resolve_space_probe() -> tuple[int | None, bool]:
+    """Status override is unauthenticated and cannot authorize.
+
+    Otherwise one read of SZL_SPACE_API_URL, or the canonical Space API.
+    """
     override = os.environ.get("SZL_SPACE_API_STATUS", "")
     if override == "NONE":
-        return None
+        return None, False
     if override.isdigit():
-        return int(override)
-    return fetch_space_status()
+        return int(override), False
+    url = os.environ.get("SZL_SPACE_API_URL", "").strip() or SPACE_API_URL
+    return fetch_space_status(url)
 
 
-def readiness_from_space_status(status_code: int | None) -> dict:
-    """Fail closed. HTTP 401 is BLOCKED and is never a ready Space."""
+def space_endpoint_authorized(status_code: int | None, authenticated: bool) -> bool:
+    """True only when this process sent authorization and the endpoint returned 200."""
+    return status_code == 200 and authenticated is True
+
+
+def readiness_from_space_status(status_code: int | None, authenticated: bool = False) -> dict:
+    """Fail closed. HTTP 401 is BLOCKED. ready is true only after an authorized 200."""
     record = {
         "ok": False,
         "ready": False,
@@ -59,11 +86,19 @@ def readiness_from_space_status(status_code: int | None) -> dict:
         "lambda": "Conjecture 1 OPEN",
         "signing": "STRUCTURAL-ONLY",
         "space_api": status_code,
+        "space_api_authenticated": bool(authenticated),
         "http": 503,
     }
     if status_code == 401:
         record["status"] = "BLOCKED"
         record["reason"] = "SPACE_API_UNAUTHORIZED"
+        return record
+    if space_endpoint_authorized(status_code, authenticated):
+        record["ok"] = True
+        record["ready"] = True
+        record["http"] = 200
+        record["status"] = "MEASURED"
+        record["reason"] = "SPACE_API_AUTHORIZED"
         return record
     if status_code == 200:
         record["status"] = "BLOCKED"
@@ -139,7 +174,8 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/readyz":
-            record = readiness_from_space_status(resolve_space_status())
+            status_code, authenticated = resolve_space_probe()
+            record = readiness_from_space_status(status_code, authenticated)
             record["doctrine"] = DOCTRINE
             record["kernel_commit"] = KERNEL_COMMIT
             record["version"] = __version__

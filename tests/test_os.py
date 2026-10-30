@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
 import os
+import secrets
 import unittest
 from pathlib import Path
 
@@ -133,6 +134,126 @@ class Serve(unittest.TestCase):
             conn.close()
         finally:
             httpd.shutdown()
+
+    def test_readyz_authorized_success_only(self):
+        import threading
+        from http.client import HTTPConnection
+        from http.server import BaseHTTPRequestHandler
+        from szl_os.serve import ThreadingHTTPServer, Handler, readiness_from_space_status
+
+        class SpaceStub(BaseHTTPRequestHandler):
+            accept = ""
+            force_status = None
+
+            def do_GET(self):  # noqa: N802
+                presented = self.headers.get("Authorization", "")
+                if self.force_status is not None:
+                    code = int(self.force_status)
+                elif self.accept and presented == "Bearer " + self.accept:
+                    code = 200
+                else:
+                    code = 401
+                body = b"{}"
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, fmt, *args):
+                return
+
+        token = secrets.token_hex(16)
+        SpaceStub.accept = token
+        SpaceStub.force_status = None
+        stub = ThreadingHTTPServer(("127.0.0.1", 0), SpaceStub)
+        stub_port = stub.server_address[1]
+        stub_thread = threading.Thread(target=stub.serve_forever, daemon=True)
+        stub_thread.start()
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        saved = {
+            name: os.environ.get(name)
+            for name in ("SZL_SPACE_API_STATUS", "SZL_SPACE_API_URL", "SZL_SPACE_API_TOKEN")
+        }
+
+        def restore() -> None:
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+        def readyz():
+            conn = HTTPConnection("127.0.0.1", port, timeout=3)
+            try:
+                conn.request("GET", "/readyz")
+                response = conn.getresponse()
+                body = json.loads(response.read().decode())
+                return response.status, body
+            finally:
+                conn.close()
+
+        try:
+            os.environ.pop("SZL_SPACE_API_STATUS", None)
+            os.environ["SZL_SPACE_API_URL"] = f"http://127.0.0.1:{stub_port}/"
+            os.environ.pop("SZL_SPACE_API_TOKEN", None)
+            status, body = readyz()
+            self.assertEqual(status, 503)
+            self.assertFalse(body["ready"])
+            self.assertEqual(body["status"], "BLOCKED")
+            self.assertEqual(body["reason"], "SPACE_API_UNAUTHORIZED")
+            self.assertEqual(body["space_api"], 401)
+            self.assertFalse(body["space_api_authenticated"])
+
+            os.environ["SZL_SPACE_API_TOKEN"] = secrets.token_hex(16)
+            status, body = readyz()
+            self.assertEqual(status, 503)
+            self.assertFalse(body["ready"])
+            self.assertEqual(body["reason"], "SPACE_API_UNAUTHORIZED")
+
+            os.environ["SZL_SPACE_API_TOKEN"] = token
+            status, body = readyz()
+            self.assertEqual(status, 200)
+            self.assertTrue(body["ready"])
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["status"], "MEASURED")
+            self.assertEqual(body["reason"], "SPACE_API_AUTHORIZED")
+            self.assertEqual(body["space_api"], 200)
+            self.assertTrue(body["space_api_authenticated"])
+            self.assertEqual(body["hf_push"], "RETIRED")
+            self.assertFalse(body["proven_trust"])
+            self.assertNotIn(token, json.dumps(body))
+
+            os.environ.pop("SZL_SPACE_API_TOKEN", None)
+            SpaceStub.force_status = 200
+            status, body = readyz()
+            self.assertEqual(status, 503)
+            self.assertFalse(body["ready"])
+            self.assertEqual(body["reason"], "SPACE_PUBLICATION_RETIRED")
+
+            os.environ["SZL_SPACE_API_TOKEN"] = token
+            os.environ["SZL_SPACE_API_STATUS"] = "200"
+            status, body = readyz()
+            self.assertEqual(status, 503)
+            self.assertFalse(body["ready"])
+            self.assertEqual(body["reason"], "SPACE_PUBLICATION_RETIRED")
+            self.assertFalse(body["space_api_authenticated"])
+
+            os.environ["SZL_SPACE_API_STATUS"] = "401"
+            status, body = readyz()
+            self.assertEqual(status, 503)
+            self.assertFalse(body["ready"])
+            self.assertEqual(body["reason"], "SPACE_API_UNAUTHORIZED")
+            denied = readiness_from_space_status(401, True)
+            self.assertFalse(denied["ready"])
+            self.assertEqual(denied["reason"], "SPACE_API_UNAUTHORIZED")
+        finally:
+            restore()
+            httpd.shutdown()
+            stub.shutdown()
 
 
 if __name__ == "__main__":
