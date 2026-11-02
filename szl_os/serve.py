@@ -139,12 +139,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(max(0, min(length, 200000))) if length else b"{}"
-        try:
-            data = json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            return {}
-        return data if isinstance(data, dict) else {}
+        if not 0 <= length <= 200000:
+            raise ValueError("request body length out of bounds")
+        # An omitted body retains the documented local defaults. A supplied
+        # body must parse as an object; never substitute defaults on failure.
+        raw = self.rfile.read(length) if length else b"{}"
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("request body must be a JSON object")
+        return data
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -214,7 +217,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/") or "/"
-        data = self._read_json()
+        try:
+            data = self._read_json()
+        except (ValueError, RecursionError):
+            self._send(400, _json({"ok": False, "error": "invalid_json_object"}), "application/json")
+            return
         if path == "/api/organs/integrity":
             rec = evaluate_anatomy(
                 zero_heart=bool(data.get("zero_heart")),

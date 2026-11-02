@@ -70,6 +70,11 @@ POST /api/verticals/run     {"id":"a11oy","signal":"..."}
 POST /api/captures/run      {"id":"vllm","signal":"..."}
 ```
 
+POST bodies must be UTF-8 JSON objects of at most 200,000 bytes. Invalid JSON,
+non-object values, and invalid or excessive body lengths return HTTP 400 with
+`{"ok":false,"error":"invalid_json_object"}` before any evaluator runs.
+An omitted body or `{}` retains the default local behavior.
+
 ```bash
 python -m unittest discover -s tests -v
 python app.py
