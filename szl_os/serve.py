@@ -144,6 +144,8 @@ class Handler(BaseHTTPRequestHandler):
         # An omitted body retains the documented local defaults. A supplied
         # body must parse as an object; never substitute defaults on failure.
         raw = self.rfile.read(length) if length else b"{}"
+        if length and len(raw) != length:
+            raise ValueError("request body shorter than Content-Length")
         data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict):
             raise ValueError("request body must be a JSON object")
