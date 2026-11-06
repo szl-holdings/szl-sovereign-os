@@ -83,3 +83,5 @@ python app.py
 See [FOLD.md](FOLD.md) for the archive-bound authority boundary.
 
 Doctrine v11 LOCKED · 749/14/163 · kernel `c7c0ba17` · locked-proven 8 · Λ = Conjecture 1 · Apache-2.0
+
+Estate on Hugging Face: models, datasets and Spaces are published under the [SZLHOLDINGS](https://huggingface.co/SZLHOLDINGS) org.
