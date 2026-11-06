@@ -167,6 +167,12 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict):
             raise ValueError("request body must be a JSON object")
+        # JSON can escape an unpaired UTF-16 surrogate. json.loads accepts it,
+        # but it is not Unicode text: hashing it for a receipt raised after the
+        # evaluators ran and the client got no response. Re-encoding raises
+        # UnicodeEncodeError (a ValueError) for any such key or value, so the
+        # body is refused like other invalid JSON. Paired escapes still decode.
+        json.dumps(data, ensure_ascii=False).encode("utf-8")
         return data
 
     def do_GET(self) -> None:  # noqa: N802
