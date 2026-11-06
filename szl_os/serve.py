@@ -21,6 +21,12 @@ from .verticals import VERTICALS, run_vertical
 
 ROOT = Path(__file__).resolve().parent.parent
 SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
+# Files index.html links with "./". Exact-match allow-list: a request path is
+# never joined onto the filesystem, so nothing else under ROOT is reachable.
+STATIC_ASSETS = {
+    "/szl-holo-v2.css": ("szl-holo-v2.css", "text/css; charset=utf-8"),
+    "/szl-holo-v2.js": ("szl-holo-v2.js", "text/javascript; charset=utf-8"),
+}
 
 
 def request_seed(value: object) -> int:
@@ -231,6 +237,11 @@ class Handler(BaseHTTPRequestHandler):
         if path in {"/", "/index.html"}:
             html = (ROOT / "index.html").read_text(encoding="utf-8")
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+            return
+        asset = STATIC_ASSETS.get(path)
+        if asset is not None:
+            name, ctype = asset
+            self._send(200, (ROOT / name).read_bytes(), ctype)
             return
         self._send(404, _json({"ok": False, "error": "not found"}), "application/json")
 

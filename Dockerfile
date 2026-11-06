@@ -4,7 +4,7 @@
 FROM mirror.gcr.io/library/python:3.12-slim
 WORKDIR /app
 COPY szl_os ./szl_os
-COPY app.py index.html ./
+COPY app.py index.html szl-holo-v2.css szl-holo-v2.js ./
 EXPOSE 7860
 ENV PORT=7860
 CMD ["python", "app.py"]
