@@ -88,13 +88,16 @@ POST /api/captures/run      {"id":"vllm","signal":"..."}
 
 `/api/verticals/run` and `/api/captures/run` also accept `GET ?id=...&signal=...`.
 
-POST bodies must be UTF-8 JSON objects of at most 200,000 bytes. Invalid JSON,
-non-object values, and invalid or excessive body lengths return HTTP 400 with
+POST bodies must be UTF-8 JSON objects of at most 200,000 bytes. Invalid JSON
+(including a string that escapes an unpaired UTF-16 surrogate), non-object
+values, and invalid or excessive body lengths return HTTP 400 with
 `{"ok":false,"error":"invalid_json_object"}` before any evaluator runs.
 An omitted body or `{}` retains the default local behavior.
-A `seed` that `int()` cannot read (text, arrays, objects, NaN, infinity) returns
-HTTP 400 with `{"ok":false,"error":"invalid_seed"}`, also before the evaluator
-runs; an omitted seed means 11.
+A `seed` that `int()` cannot read (text such as `"abc"` or `"1.5"`, non-empty
+arrays or objects, NaN, infinity) returns HTTP 400 with
+`{"ok":false,"error":"invalid_seed"}`, also before the evaluator runs. An
+omitted seed, or a JSON `null`, `0`, `false`, `""`, `[]` or `{}`, means 11, as
+before.
 
 `/readyz` is HTTP 200 with `"ready": true` only when this process sent
 `SZL_SPACE_API_TOKEN` and the Space API (`SZL_SPACE_API_URL`, default the retired
@@ -108,9 +111,11 @@ authorize.
 
 - **Shown here, by `tests/` and `scripts/health_smoke.py`:** the kernel blocks on
   the injected faults the suite exercises (zero heart, fabricated joule, WILLAY
-  veto) and flags a tampered chain (`chain_ok: false`); malformed HTTP input gets
-  a structured 400 before any evaluator runs; `/readyz` stays 503 unless an
-  authorized 200 is observed; every `./` asset `index.html` links is served.
+  veto) and flags a tampered chain (`chain_ok: false`); malformed POST bodies
+  (invalid JSON or UTF-8, unpaired surrogates, non-objects, bad or short
+  `Content-Length`) and non-integer seeds get a structured 400 before any
+  evaluator runs; `/readyz` stays 503 unless an authorized 200 is observed;
+  every `./` asset `index.html` links is served.
 - **Not shown:** a hosted runtime (the standalone Space is retired), any
   signature (receipts are a structural hash), Λ uniqueness (Conjecture 1 is
   open), any energy figure (always `UNAVAILABLE`), real actuation (killinchu and
