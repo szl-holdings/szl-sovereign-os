@@ -30,6 +30,22 @@ updates:
         patterns:
           - "*"
 
+  # Hash-pinned CI tooling (requirements/ci/*.txt, compiled from *.in).
+  - package-ecosystem: "pip"
+    directory: "/requirements/ci"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
+    groups:
+      pip-ci:
+        patterns:
+          - "*"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -44,3 +60,11 @@ updates:
       docker:
         patterns:
           - "*"
+    ignore:
+      # The image stays on CPython 3.12 (owner pin, #24); scripts/check_provenance_wording.py
+      # fails any other tag, so 3.13+ tag bumps (#12, #22) could only open red PRs.
+      # Digest refreshes of 3.12-slim still arrive.
+      - dependency-name: "library/python"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"

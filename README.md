@@ -56,29 +56,75 @@ GitHub retains this source for provenance and historical reproducibility. Canoni
 - [szl-quant](https://github.com/szl-holdings/szl-quant) — paper-only
 - [szl-real-estate](https://github.com/szl-holdings/szl-real-estate) — public PLUTO/ACS, not an MLS
 
+## Install, verify, run
+
+Stdlib only, Python 3.11–3.13 (CI runs all three). `szl-os` is **not on PyPI**:
+no tag or release has been cut, and `publish-pypi.yml` only gates release
+readiness until one is. Work from a checkout:
+
+```bash
+python -m pip install -e '.[test]'    # optional; the suite also runs from a bare checkout
+python -m unittest discover -s tests -v
+python scripts/health_smoke.py        # liveness + fail-closed /readyz; one unauthenticated read of the HF Space API
+python app.py                         # serves 0.0.0.0:7860 (PORT overrides)
+```
+
 ## Local API
 
 The retained source can still be exercised locally for tests and reproducibility; that does not establish a hosted runtime.
 
 ```
-GET  /healthz
+GET  /                      front door: index.html, szl-holo-v2.css, szl-holo-v2.js
+GET  /healthz               liveness only ("ready": false)
+GET  /readyz                fail-closed readiness (below)
 GET  /api/selftest
 GET  /api/verticals
 GET  /api/captures
-POST /api/organs/integrity
+GET  /api/organs/integrity  ?seed=11
+POST /api/organs/integrity  {"seed":11,"zero_heart":false,"tamper_chain":false,...}
 POST /api/verticals/run     {"id":"a11oy","signal":"..."}
 POST /api/captures/run      {"id":"vllm","signal":"..."}
 ```
 
-POST bodies must be UTF-8 JSON objects of at most 200,000 bytes. Invalid JSON,
-non-object values, and invalid or excessive body lengths return HTTP 400 with
+`/api/verticals/run` and `/api/captures/run` also accept `GET ?id=...&signal=...`.
+
+POST bodies must be UTF-8 JSON objects of at most 200,000 bytes. Invalid JSON
+(including a string that escapes an unpaired UTF-16 surrogate), non-object
+values, and invalid or excessive body lengths return HTTP 400 with
 `{"ok":false,"error":"invalid_json_object"}` before any evaluator runs.
 An omitted body or `{}` retains the default local behavior.
+A `seed` that `int()` cannot read (text such as `"abc"` or `"1.5"`, non-empty
+arrays or objects, NaN, infinity) returns HTTP 400 with
+`{"ok":false,"error":"invalid_seed"}`, also before the evaluator runs. An
+omitted seed, or a JSON `null`, `0`, `false`, `""`, `[]` or `{}`, means 11, as
+before.
 
-```bash
-python -m unittest discover -s tests -v
-python app.py
-```
+`/readyz` is HTTP 200 with `"ready": true` only when this process sent
+`SZL_SPACE_API_TOKEN` and the Space API (`SZL_SPACE_API_URL`, default the retired
+`SZLHOLDINGS/szl-sovereign-os` endpoint) answered 200. A 401 is `BLOCKED`, an
+unauthenticated 200 is `BLOCKED` (`SPACE_PUBLICATION_RETIRED`), anything else is
+`UNAVAILABLE`, all as HTTP 503. With the standalone Space retired, 503 is the
+expected answer. `SZL_SPACE_API_STATUS` is a test override and can never
+authorize.
+
+## Proof boundary
+
+- **Shown here, by `tests/` and `scripts/health_smoke.py`:** the kernel blocks on
+  the injected faults the suite exercises (zero heart, fabricated joule, WILLAY
+  veto) and flags a tampered chain (`chain_ok: false`); malformed POST bodies
+  (invalid JSON or UTF-8, unpaired surrogates, non-objects, bad or short
+  `Content-Length`) and non-integer seeds get a structured 400 before any
+  evaluator runs; `/readyz` stays 503 unless an authorized 200 is observed;
+  every `./` asset `index.html` links is served.
+- **Not shown:** a hosted runtime (the standalone Space is retired), any
+  signature (receipts are a structural hash), Λ uniqueness (Conjecture 1 is
+  open), any energy figure (always `UNAVAILABLE`), real actuation (killinchu and
+  quant are `SIMULATED`), or the Lean counts in the footer (pinned constants from
+  lutar-lean at `c7c0ba17`, not recomputed here).
+- **Open on `main`:** under a WILLAY veto most category captures still report
+  `decision: ADVISORY` while `anatomy_verdict` is `BLOCKED`; the fix is in
+  [draft PR #25](https://github.com/szl-holdings/szl-sovereign-os/pull/25).
+  Until it lands, read `anatomy_verdict`.
 
 See [FOLD.md](FOLD.md) for the archive-bound authority boundary.
 

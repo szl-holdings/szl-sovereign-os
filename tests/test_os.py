@@ -134,6 +134,7 @@ class Serve(unittest.TestCase):
             conn.close()
         finally:
             httpd.shutdown()
+            httpd.server_close()
 
     def test_readyz_authorized_success_only(self):
         import threading
@@ -253,7 +254,9 @@ class Serve(unittest.TestCase):
         finally:
             restore()
             httpd.shutdown()
+            httpd.server_close()
             stub.shutdown()
+            stub.server_close()
 
 
 if __name__ == "__main__":

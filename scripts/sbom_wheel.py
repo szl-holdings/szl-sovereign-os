@@ -17,7 +17,10 @@ def _metadata(wheel: Path) -> dict[str, str]:
         name = next(item for item in archive.namelist() if item.endswith(".dist-info/METADATA"))
         text = archive.read(name).decode("utf-8")
     message = Parser().parsestr(text)
-    return {"name": message["Name"], "version": message["Version"], "license": message["License"] or ""}
+    # Metadata 2.4 carries the SPDX expression in License-Expression; older
+    # metadata used the free-text License field.
+    license_ = message["License-Expression"] or message["License"] or ""
+    return {"name": message["Name"], "version": message["Version"], "license": license_}
 
 
 def _files(wheel: Path) -> list[dict]:
@@ -78,12 +81,18 @@ def readback(wheel: Path, document_path: Path) -> int:
     if package["name"] != "szl-os" or package["versionInfo"] != "0.1.0":
         print("sbom readback failed: expected szl-os 0.1.0", file=sys.stderr)
         return 1
+    if not meta["license"] or package["licenseDeclared"] != meta["license"]:
+        print("sbom readback failed: licenseDeclared is empty or differs from wheel METADATA", file=sys.stderr)
+        return 1
     expected = {item["fileName"]: item["checksums"][0]["checksumValue"] for item in document["files"]}
     actual = {item["fileName"]: item["checksums"][0]["checksumValue"] for item in _files(wheel)}
     if expected != actual:
         print("sbom readback failed: file hashes differ from the wheel", file=sys.stderr)
         return 1
-    print(f"sbom readback ok files={len(actual)} name={package['name']} version={package['versionInfo']}")
+    print(
+        f"sbom readback ok files={len(actual)} name={package['name']} "
+        f"version={package['versionInfo']} license={package['licenseDeclared']}"
+    )
     return 0
 
 

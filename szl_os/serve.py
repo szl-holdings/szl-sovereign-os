@@ -21,6 +21,24 @@ from .verticals import VERTICALS, run_vertical
 
 ROOT = Path(__file__).resolve().parent.parent
 SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
+# Files index.html links with "./". Exact-match allow-list: a request path is
+# never joined onto the filesystem, so nothing else under ROOT is reachable.
+STATIC_ASSETS = {
+    "/szl-holo-v2.css": ("szl-holo-v2.css", "text/css; charset=utf-8"),
+    "/szl-holo-v2.js": ("szl-holo-v2.js", "text/javascript; charset=utf-8"),
+}
+
+
+def request_seed(value: object) -> int:
+    """Coerce a request seed with the historical defaults (missing or falsy -> 11).
+
+    Raises ValueError for anything int() rejects (text, lists, objects, NaN,
+    infinity) so the handler can answer HTTP 400 before any evaluator runs.
+    """
+    try:
+        return int(value or 11)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("seed must be an integer") from exc
 
 
 def space_api_token() -> str:
@@ -149,6 +167,12 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict):
             raise ValueError("request body must be a JSON object")
+        # JSON can escape an unpaired UTF-16 surrogate. json.loads accepts it,
+        # but it is not Unicode text: hashing it for a receipt raised after the
+        # evaluators ran and the client got no response. Re-encoding raises
+        # UnicodeEncodeError (a ValueError) for any such key or value, so the
+        # body is refused like other invalid JSON. Paired escapes still decode.
+        json.dumps(data, ensure_ascii=False).encode("utf-8")
         return data
 
     def do_GET(self) -> None:  # noqa: N802
@@ -200,7 +224,12 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/organs/integrity":
-            rec = evaluate_anatomy(seed=int(qs.get("seed", ["11"])[0] or 11))
+            try:
+                seed = request_seed(qs.get("seed", ["11"])[0])
+            except ValueError:
+                self._send(400, _json({"ok": False, "error": "invalid_seed"}), "application/json")
+                return
+            rec = evaluate_anatomy(seed=seed)
             self._send(200, _json(rec), "application/json")
             return
         if path == "/api/verticals/run":
@@ -215,6 +244,11 @@ class Handler(BaseHTTPRequestHandler):
             html = (ROOT / "index.html").read_text(encoding="utf-8")
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
             return
+        asset = STATIC_ASSETS.get(path)
+        if asset is not None:
+            name, ctype = asset
+            self._send(200, (ROOT / name).read_bytes(), ctype)
+            return
         self._send(404, _json({"ok": False, "error": "not found"}), "application/json")
 
     def do_POST(self) -> None:  # noqa: N802
@@ -225,6 +259,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, _json({"ok": False, "error": "invalid_json_object"}), "application/json")
             return
         if path == "/api/organs/integrity":
+            try:
+                seed = request_seed(data.get("seed"))
+            except ValueError:
+                self._send(400, _json({"ok": False, "error": "invalid_seed"}), "application/json")
+                return
             rec = evaluate_anatomy(
                 zero_heart=bool(data.get("zero_heart")),
                 leak_canal=bool(data.get("leak_canal")),
@@ -232,7 +271,7 @@ class Handler(BaseHTTPRequestHandler):
                 fabricate_joule=bool(data.get("fabricate_joule")),
                 break_skeleton=bool(data.get("break_skeleton")),
                 willay_fire=bool(data.get("willay_fire")),
-                seed=int(data.get("seed") or 11),
+                seed=seed,
             )
             self._send(200, _json(rec), "application/json")
             return
