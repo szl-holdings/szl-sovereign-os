@@ -5,3 +5,10 @@ __pycache__/
 venv/
 *.egg-info/
 .DS_Store
+# Outputs of reproducing CI locally (python -m build, release gate, SBOM step)
+/build/
+/dist/
+/stage-*/
+/venv-*/
+/release-gate.json
+/sbom.spdx.json
