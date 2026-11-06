@@ -23,6 +23,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
 
 
+def request_seed(value: object) -> int:
+    """Coerce a request seed with the historical defaults (missing or falsy -> 11).
+
+    Raises ValueError for anything int() rejects (text, lists, objects, NaN,
+    infinity) so the handler can answer HTTP 400 before any evaluator runs.
+    """
+    try:
+        return int(value or 11)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("seed must be an integer") from exc
+
+
 def space_api_token() -> str:
     """Optional bearer token. Empty means the probe is unauthenticated. Never log this value."""
     return os.environ.get("SZL_SPACE_API_TOKEN", "").strip()
@@ -200,7 +212,12 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/organs/integrity":
-            rec = evaluate_anatomy(seed=int(qs.get("seed", ["11"])[0] or 11))
+            try:
+                seed = request_seed(qs.get("seed", ["11"])[0])
+            except ValueError:
+                self._send(400, _json({"ok": False, "error": "invalid_seed"}), "application/json")
+                return
+            rec = evaluate_anatomy(seed=seed)
             self._send(200, _json(rec), "application/json")
             return
         if path == "/api/verticals/run":
@@ -225,6 +242,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, _json({"ok": False, "error": "invalid_json_object"}), "application/json")
             return
         if path == "/api/organs/integrity":
+            try:
+                seed = request_seed(data.get("seed"))
+            except ValueError:
+                self._send(400, _json({"ok": False, "error": "invalid_seed"}), "application/json")
+                return
             rec = evaluate_anatomy(
                 zero_heart=bool(data.get("zero_heart")),
                 leak_canal=bool(data.get("leak_canal")),
@@ -232,7 +254,7 @@ class Handler(BaseHTTPRequestHandler):
                 fabricate_joule=bool(data.get("fabricate_joule")),
                 break_skeleton=bool(data.get("break_skeleton")),
                 willay_fire=bool(data.get("willay_fire")),
-                seed=int(data.get("seed") or 11),
+                seed=seed,
             )
             self._send(200, _json(rec), "application/json")
             return
