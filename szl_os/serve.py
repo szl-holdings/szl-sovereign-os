@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import ipaddress
+import threading
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,8 +20,14 @@ from .capture import CAPTURES, RUNNERS, run_capture
 from .doctrine import DOCTRINE, KERNEL_COMMIT, proven_trust
 from .organs import evaluate_anatomy, selftest
 from .verticals import VERTICALS, run_vertical
+from .tinkuy import AdmissionHold as TinkuyHold, OllamaLocal, run_round as tinkuy_round, status as tinkuy_status
 
 ROOT = Path(__file__).resolve().parent.parent
+TINKUY_STATIC = Path(__file__).resolve().parent / "static"
+TINKUY_SINGLE_FLIGHT = threading.BoundedSemaphore(value=1)
+# Process-local replay suppression only: never claim persistent signed identity.
+TINKUY_SEEN_ROUNDS: list[str] = []
+TINKUY_SEEN_LIMIT = 256
 SPACE_API_URL = "https://huggingface.co/api/spaces/SZLHOLDINGS/szl-sovereign-os"
 # Files index.html links with "./". Exact-match allow-list: a request path is
 # never joined onto the filesystem, so nothing else under ROOT is reachable.
@@ -175,10 +183,79 @@ class Handler(BaseHTTPRequestHandler):
         json.dumps(data, ensure_ascii=False).encode("utf-8")
         return data
 
+    def _tinkuy_send(self, status: int, raw: bytes, ctype: str) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", (
+            "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; "
+            "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        ))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def _tinkuy_local_request(self, *, require_origin: bool = True) -> bool:
+        try:
+            local = ipaddress.ip_address(self.client_address[0]).is_loopback
+        except ValueError:
+            return False
+        port = self.server.server_address[1]
+        allowed_hosts = {f"localhost:{port}", f"127.0.0.1:{port}", f"[::1]:{port}"}
+        host = self.headers.get("Host", "")
+        if not local or host not in allowed_hosts:
+            return False  # Reject DNS rebinding and Host-header surprises.
+        if not require_origin:
+            return True
+        return self.headers.get("Origin", "") == "http://" + host
+
+    def _tinkuy_drain_rejected_body(self) -> None:
+        """Drain a small refused POST before replying, avoiding Windows TCP RST.
+
+        This reads no more than 8192 discarded bytes, never parses/logs data,
+        and never allows an unauthenticated request to invoke an adapter.
+        """
+        value = self.headers.get("Content-Length", "")
+        if not value.isdecimal():
+            self.close_connection = True
+            return
+        length = int(value)
+        if not 0 <= length <= 8192:
+            self.close_connection = True
+            return
+        if length:
+            self.connection.settimeout(2.0)
+            try:
+                self.rfile.read(length)
+            except (OSError, TimeoutError):
+                self.close_connection = True
+
+    def _tinkuy_reject(self, http_status: int, reason: str) -> None:
+        self._tinkuy_drain_rejected_body()
+        self._tinkuy_send(http_status, _json({"status": "HOLD", "reason": reason}),
+                          "application/json")
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
+        if path == "/api/tinkuy/status":
+            record = tinkuy_status()
+            record["local_inference_opted_in"] = (
+                os.environ.get("TINKUY_ALLOW_LOCAL_INFERENCE") == "1"
+                and self._tinkuy_local_request(require_origin=False)
+            )
+            self._tinkuy_send(200, _json(record), "application/json")
+            return
+        if path in {"/tinkuy", "/tinkuy.html"}:
+            self._tinkuy_send(200, (TINKUY_STATIC / "tinkuy.html").read_bytes(),
+                              "text/html; charset=utf-8")
+            return
+        if path == "/tinkuy.js":
+            self._tinkuy_send(200, (TINKUY_STATIC / "tinkuy.js").read_bytes(),
+                              "text/javascript; charset=utf-8")
+            return
         if path == "/healthz":
             self._send(
                 200,
@@ -253,6 +330,48 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path.rstrip("/") or "/"
+        if path == "/api/tinkuy/round":
+            if not self._tinkuy_local_request():
+                self._tinkuy_reject(403, "LOCAL_OPERATOR_ONLY")
+                return
+            if self.headers.get("Content-Type", "").split(";")[0].strip().lower() != "application/json":
+                self._tinkuy_reject(415, "JSON_REQUIRED")
+                return
+            if os.environ.get("TINKUY_ALLOW_LOCAL_INFERENCE") != "1":
+                self._tinkuy_reject(423, "LIVE_REVIEW_OPT_IN_REQUIRED")
+                return
+            if not TINKUY_SINGLE_FLIGHT.acquire(blocking=False):
+                self._tinkuy_reject(429, "REVIEW_BUSY")
+                return
+            try:
+                data = self._read_json()
+                # No untrusted human-supplied text is accepted as a GPT-6 or
+                # other model answer; we validate identity claims in the core.
+                from .tinkuy import validate_request
+                data = validate_request(data)
+                if data["passes"] != 1:
+                    raise TinkuyHold("LIVE_PASS_BUDGET_MUST_BE_ONE")
+                if data["round_id"] in TINKUY_SEEN_ROUNDS:
+                    self._tinkuy_send(409, _json({
+                        "status": "HOLD", "reason": "ROUND_REPLAY_IN_THIS_PROCESS"
+                    }), "application/json")
+                    return
+                if len(TINKUY_SEEN_ROUNDS) >= TINKUY_SEEN_LIMIT:
+                    raise TinkuyHold("ROUND_ID_BUDGET_EXHAUSTED")
+                TINKUY_SEEN_ROUNDS.append(data["round_id"])
+                answer = tinkuy_round(data, {
+                    "kimi": OllamaLocal("kimi"),
+                    "mistral": OllamaLocal("mistral"),
+                    # GPT-6 text-model API is not available to this worker.
+                    # Do not impersonate it with caller-supplied notes.
+                })
+                self._tinkuy_send(200, _json(answer), "application/json")
+            except (ValueError, RecursionError, UnicodeError):
+                self._tinkuy_send(400, _json({"status": "HOLD", "reason": "INPUT_INVALID"}),
+                                  "application/json")
+            finally:
+                TINKUY_SINGLE_FLIGHT.release()
+            return
         try:
             data = self._read_json()
         except (ValueError, RecursionError):
