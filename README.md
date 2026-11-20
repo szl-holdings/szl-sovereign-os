@@ -69,6 +69,22 @@ python scripts/health_smoke.py        # liveness + fail-closed /readyz; one unau
 python app.py                         # serves 0.0.0.0:7860 (PORT overrides)
 ```
 
+## Tinkuy: bounded three-reviewer research preview
+
+The [Tinkuy prototype](docs/TINKUY.md) extends this existing Python operator kernel
+with a responsive, illustrative 3D local page at `/tinkuy`, a read-only
+`/api/tinkuy/status` and a local-only opt-in `/api/tinkuy/round`.
+It evaluates Kimi and Mistral local CPU review adapters without pretending a
+GPT-6 backend is connected, and keeps all provider identity and release
+admission explicitly unverified. **This is not AGI, a trained model, or a
+publicly operational service.**
+
+The standalone Hugging Face Space for this repository remains **RETIRED**;
+these routes do not recreate or deploy that Space. Live model requests require
+`TINKUY_ALLOW_LOCAL_INFERENCE=1` on a workstation and refuse an existing
+Ollama model workload, spoofed Host/Origin, replayed round IDs or multiple
+live passes. See [full threat model](docs/TINKUY.md).
+
 ## Local API
 
 The retained source can still be exercised locally for tests and reproducibility; that does not establish a hosted runtime.

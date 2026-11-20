@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+<title>Tinkuy — SZL Three-Reviewer Research Preview</title>
+<style>
+:root{--ink:#ecf4ff;--muted:#acc4d7;--line:#396079;--teal:#68e4c5;--amber:#ffcc83}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 85% 3%,#174360,transparent 45%),#080f1a;color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+header,main,footer{width:min(1160px,100% - 32px);margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:24px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{font-weight:800;letter-spacing:.15em;color:var(--teal)}.badge{color:var(--amber);border:1px solid var(--amber);border-radius:99px;padding:5px 12px;font-size:.8rem;font-weight:700}
+h1{font-size:clamp(2.6rem,8vw,5rem);line-height:1.05;letter-spacing:-.05em;margin:0}h2{margin-top:0;font-size:1.35rem}.lead{color:var(--muted);font-size:1.1rem;max-width:670px}
+.hero{display:grid;grid-template-columns:1.2fr 1fr;align-items:center;gap:35px;padding:45px 0}.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.card{border:1px solid var(--line);background:#122030e8;border-radius:15px;padding:24px;margin-bottom:22px}
+.orbit{margin:auto;width:280px;height:280px;position:relative;perspective:700px;display:grid;place-items:center}
+.orbit i{position:absolute;width:80%;height:80%;border:2px solid var(--teal);border-radius:50%;transform-style:preserve-3d;box-shadow:0 0 30px #68e4c544;animation:spin 16s linear infinite}
+.orbit i:nth-child(2){width:62%;height:62%;border-color:#9db9ff;animation-duration:21s;animation-direction:reverse}
+.orbit i:nth-child(3){width:44%;height:44%;border-color:var(--amber);animation-duration:13s}
+.orbit b{color:var(--teal);font-size:2.2rem;text-shadow:0 0 28px var(--teal)}.orbit small{position:absolute;bottom:0;color:var(--muted);font-size:.7rem}
+@keyframes spin{from{transform:rotateX(68deg) rotateZ(0)}to{transform:rotateX(68deg) rotateZ(360deg)}}@media(prefers-reduced-motion:reduce){.orbit i{animation:none}}
+label{display:block;margin-top:14px;color:var(--muted);font-weight:650}input,textarea{display:block;width:100%;background:#091724;color:var(--ink);border:1px solid #62859d;border-radius:8px;padding:12px;margin-top:5px;font:inherit}
+textarea{min-height:110px}button{margin-top:18px;padding:12px 16px;font:inherit;font-weight:750;border:0;border-radius:8px;background:var(--teal);color:#062219;cursor:pointer}
+button:disabled{background:#425263;color:#cad8e4;cursor:not-allowed}:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+ul{padding-left:22px}li{margin:10px 0}pre{border-radius:8px;padding:15px;background:#071522;max-height:440px;overflow:auto;overflow-wrap:anywhere;white-space:pre-wrap;font-size:.83rem;border:1px solid var(--line)}
+a{color:#b8ebff}.status{color:var(--amber);font-weight:700}footer{color:var(--muted);border-top:1px solid var(--line);padding:24px 0;font-size:.85rem}
+@media(max-width:800px){.hero,.cards{grid-template-columns:1fr}.orbit{width:215px;height:215px}.hero{padding:28px 0}}
+</style><script src="/tinkuy.js" defer></script></head><body>
+<header><div class="logo">SZL HOLDINGS / TINKUY</div><div class="badge">RESEARCH PREVIEW — NOT AGI</div></header>
+<main><div class="hero"><div><h1>Tinkuy<span style="color:var(--teal)">.</span></h1>
+<p class="lead">Quechua for “encounter.” Kimi, Mistral and GPT-6 review a declared source revision through bounded proposals and explicit falsifiers. No invented consensus or release authority.</p>
+<p id="mode" class="status" role="status" aria-live="polite">Reading local admission status…</p></div>
+<div class="orbit" role="img" aria-label="Decorative 3D rings, not live telemetry"><i></i><i></i><i></i><b>3 × 1</b><small>ILLUSTRATIVE / NOT LIVE TELEMETRY</small></div></div>
+<div class="cards"><section class="card"><h2>Local research round</h2><p>Off by default. Never enter credentials. One live pass maximum.</p>
+<form id="round-form"><label for="round_id">Round ID</label><input id="round_id" value="tinkuy-r1" maxlength="64" required>
+<label for="source_repo">Canonical source repository</label><input id="source_repo" value="szl-holdings/szl-sovereign-os" maxlength="113" required>
+<label for="source_sha">Declared exact 40-hex GitHub revision</label><input id="source_sha" pattern="[0-9a-f]{40}" maxlength="40" placeholder="Paste a real protected-main SHA" required>
+<label for="objective">Research question</label><textarea id="objective" maxlength="1000" required>What is one falsifiable improvement to model/source provenance?</textarea>
+<button type="submit" id="run" disabled>Local review requires opt-in</button></form></section>
+<section class="card"><h2>Honest three-brain status</h2><ul>
+<li><strong>Kimi:</strong> local Ollama adapter, only after operator opt-in.</li>
+<li><strong>Mistral:</strong> local CPU-only reviewer, only after opt-in.</li>
+<li><strong>GPT-6:</strong> not connected to this backend; the page never impersonates it.</li>
+</ul><p>All replies are <strong>observed but unsigned</strong>. Caller-declared source SHA is not a signed publication receipt. Responses cannot merge, publish, train or spend.</p>
+<p>Compare the actual <a href="https://github.com/szl-holdings">protected GitHub source</a> and verified Hub runtime separately.</p></section></div>
+<section class="card"><h2>Review outcome and release holds</h2><pre id="result" aria-live="polite" tabindex="0">No research round has run.</pre></section>
+</main><footer>Doctrine v11 · offline loop ceiling 10 · local live loop ceiling 1 · all production admission remains HOLD.</footer>
+</body></html>
